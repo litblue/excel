@@ -1,9 +1,8 @@
 package cn.litblue.excel.service;
 
 import cn.litblue.excel.entity.Excel;
-import cn.litblue.excel.mapper.ExcelMapper;
 import cn.litblue.excel.utils.DataListListener;
-import cn.litblue.excel.utils.ThreadQuery;
+import cn.litblue.excel.thread.ThreadQuery;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.write.metadata.WriteSheet;
@@ -22,8 +21,8 @@ import java.util.List;
 import java.util.concurrent.*;
 
 /**
- * @author: litblue
- * @since: 2019/12/23 16:52
+ * @author litblue
+ * @since 2019/12/23 16:52
  */
 
 @Slf4j
@@ -31,30 +30,22 @@ import java.util.concurrent.*;
 public class ExcelService {
 
     @Resource
-    private ExcelMapper excelMapper;
-
-    @Resource
     private JdbcTemplate jdbcTemplate;
+
+    private static final int CORE_POOL_SIZE = 5;
+    private static final int MAX_POOL_SIZE = 10;
+    private static final int QUEUE_CAPACITY = 100;
+    private static final Long KEEP_ALIVE_TIME = 1L;
 
 
     /**
-     * 读取Excel，  并传入数据库
+     * 读取Excel，并写入数据库
      * @param file
      * @return 是否成功导入数据库
      */
     public boolean importExcelByEasyExcel(MultipartFile file){
         try {
-            // 这里 需要指定读用哪个class去读，然后读取第一个sheet
-            // 需要将 ExcelMapper 传入构造器
-            // doRead() 方法中有 finish() 方法，文件流会自动关闭
-
-            /* 只读第一张工作表 */
-            // EasyExcel.read(file.getInputStream(), Excel.class, new DataListListener(excelMapper)).sheet().doRead();
-            // EasyExcel.read(file.getInputStream(), Excel.class, new DataListListener(jdbcTemplate)).sheet().doRead();
-
-
             // 读取所有工作表
-            //EasyExcel.read(file.getInputStream(), Excel.class, new DataListListener(excelMapper)).doReadAll();
             EasyExcel.read(file.getInputStream(), Excel.class, new DataListListener(jdbcTemplate)).doReadAll();
 
             return true;
@@ -69,14 +60,17 @@ public class ExcelService {
      * 导出excel
      */
     public void exportExcelByEasyExcel(HttpServletResponse response, String filename) throws ExecutionException, InterruptedException {
-        //List<Excel> excelList = excelMapper.selectAll();
+
+        // 通过多线程方式查询所需导出的数据
         List<Excel> excelList = queryExcelByThread();
 
         try {
+            // 将数据写入excel
             ExcelWriter writer = EasyExcel.write(getOutputStream(filename, response),Excel.class).build();
             WriteSheet writeSheet = EasyExcel.writerSheet("Sheet1").build();
             writer.write(excelList, writeSheet);
-            /// 千万别忘记finish 会帮忙关闭流
+
+            // 千万别忘记finish 会帮忙关闭流
             writer.finish();
         } catch (Exception e) {
             e.printStackTrace();
@@ -86,10 +80,9 @@ public class ExcelService {
     /**
      * 导出文件头信息 设置
      *
-     * @param filename
-     * @param response
-     * @return
-     * @throws Exception
+     * @param filename 文件名
+     * @param response response
+     * @return 返回流文件
      */
     public static OutputStream getOutputStream(String filename, HttpServletResponse response) throws Exception {
         try {
@@ -109,44 +102,45 @@ public class ExcelService {
 
     /**
      * 查询数据
-     * @return
-     * @throws InterruptedException
-     * @throws ExecutionException
+     * @return excel数据列表
      */
     public List<Excel> queryExcelByThread() throws InterruptedException, ExecutionException {
         List<Excel> excelList = new ArrayList<>();
 
-        int count = 600000;
+        // 查询记录总数
+        int count = 10;
 
         // 一次查询多少条
-        int rows = 8000;
+        int rows = 2;
 
         //需要查询的次数
         int times = count / rows;
 
-        int start = 1;
+        // 初始记录行的偏移量
+        int start = 0;
 
-        List<Callable<List<Excel>>> tasks = new ArrayList<>();
+        // 通过ThreadPoolExecutor构造函数自定义参数创建
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                CORE_POOL_SIZE,
+                MAX_POOL_SIZE,
+                KEEP_ALIVE_TIME,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(QUEUE_CAPACITY),
+                new ThreadPoolExecutor.CallerRunsPolicy());
 
+        // 目标数据开始放入数据的下标
         for (int i=0;i<times;i++){
             Callable<List<Excel>> listCallable = new ThreadQuery(jdbcTemplate,start,rows);
-            tasks.add(listCallable);
+            Future<List<Excel>> future = executor.submit(listCallable);
 
+            excelList.addAll(future.get());
             start += rows;
         }
 
-        //定义固定长度的线程池  防止线程过多
-        ExecutorService executorService = Executors.newFixedThreadPool(8);
+        //终止线程池
+        executor.shutdown();
 
-        List<Future<List<Excel>>> futures = executorService.invokeAll(tasks);
-
-        if (futures.size() > 0){
-            for (Future<List<Excel>> future : futures) {
-                excelList.addAll(future.get());
-            }
-        }
-
-        executorService.shutdown();
+        log.info("Finished all threads");
 
         return excelList;
     }

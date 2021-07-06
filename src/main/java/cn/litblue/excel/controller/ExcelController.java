@@ -22,8 +22,8 @@ public class ExcelController {
 
     /**
      * 导入excel
-     * @param file
-     * @return
+     * @param file  文件
+     * @return 导入结果
      */
     @PostMapping("import")
     public String importExcelByEasyExcel(@RequestParam(value = "file", required = false) MultipartFile file){
@@ -41,7 +41,7 @@ public class ExcelController {
 
     /**
      * 导出Excel
-     * @param response
+     * @param response response
      * @param filename  导出文件名，默认 xlsx 文件
      */
     @GetMapping("export")

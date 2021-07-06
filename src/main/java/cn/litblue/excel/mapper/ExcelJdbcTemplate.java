@@ -6,18 +6,19 @@ import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.util.ConcurrentModificationException;
 import java.util.List;
 
 /**
- * @author: litblue
- * @since: 2019/12/23 19:31
+ * @author litblue
+ * @since 2019/12/23 19:31
  */
 
 @Slf4j
 @Repository
 public class ExcelJdbcTemplate {
 
-    private JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * 初始化
@@ -32,21 +33,26 @@ public class ExcelJdbcTemplate {
      * @param excelList
      */
     public void insertBatchByJdbcTemplate(List<Excel> excelList){
-        String prefix = "insert delayed into `excel`(`name`, `gender`, `age`, `remark`, `uptime`) values";
+        String prefix = "insert into `excel`(`name`, `gender`, `age`, `remark`, `uptime`) values ";
 
         StringBuilder suffix  = new StringBuilder();
 
-        for (Excel excel : excelList) {
-            // 需要注意根据 字段的类型修改 单引号 '
-            suffix .append("('").append(excel.getName()).append("','");
-            suffix .append(excel.getGender()).append("',");
-            suffix .append(excel.getAge()).append(",'");
-            suffix .append(excel.getRemark()).append("',");
-            suffix .append("now()),");
+
+        try {
+            for (Excel excel : excelList) {
+                // 需要注意根据 字段的类型修改 单引号 '
+                suffix .append("('").append(excel.getName()).append("','");
+                suffix .append(excel.getGender()).append("',");
+                suffix .append(excel.getAge()).append(",'");
+                suffix .append(excel.getRemark()).append("',");
+                suffix .append("now()),");
+            }
+        } catch (java.util.ConcurrentModificationException e){
+            e.printStackTrace();
         }
 
         // 需要去除最后一个 ','
-        jdbcTemplate.batchUpdate(prefix+suffix .substring(0,suffix .length()-1));
+        jdbcTemplate.batchUpdate(prefix+suffix.substring(0,suffix.length()-1));
     }
 
 
@@ -57,12 +63,10 @@ public class ExcelJdbcTemplate {
      * @return
      */
     public List<Excel> selectExcel(Integer start, Integer rows){
-        StringBuilder sql = new StringBuilder();
-        sql.append("select `name`,`gender`,`age`,`remark` from `excel` ")
-                .append("limit ?,? ");
 
-        List<Excel> excels =  jdbcTemplate.query(sql.toString(),new Object[]{start,rows}, new BeanPropertyRowMapper<>(Excel.class));
+        String sql = "select `name`,`gender`,`age`,`remark` from `excel` " +
+                "limit ?,? ";
 
-        return excels;
+        return jdbcTemplate.query(sql,new Object[]{start,rows}, new BeanPropertyRowMapper<>(Excel.class));
     }
 }

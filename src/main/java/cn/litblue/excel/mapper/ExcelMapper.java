@@ -21,7 +21,7 @@ public interface ExcelMapper extends Mapper<Excel> {
     @Insert({
             "<script>",
             " insert into `excel`(`name`, `gender`, `age`,`remark`, `uptime`) ",
-            "values",
+            " values",
             " <foreach collection='excelList' item='excel' separator=','> ",
             "     (#{excel.name}, #{excel.gender}, #{excel.age}, #{excel.remark}, now()) ",
             " </foreach>",

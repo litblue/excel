@@ -1,4 +1,4 @@
-package cn.litblue.excel.utils;
+package cn.litblue.excel.thread;
 
 import cn.litblue.excel.entity.Excel;
 import cn.litblue.excel.mapper.ExcelJdbcTemplate;
@@ -8,12 +8,11 @@ import java.util.List;
 import java.util.concurrent.Callable;
 
 /**
- * @author: litblue
- * @since: 2019/12/24 16:53
+ * @author zhoucm
+ * @time 2021/7/5  17:19
+ * @description
  */
-
 public class ThreadQuery implements Callable<List<Excel>> {
-
 
     private final ExcelJdbcTemplate excelJdbcTemplate;
 
@@ -24,15 +23,25 @@ public class ThreadQuery implements Callable<List<Excel>> {
     private final int rows;
 
 
+    /**
+     * 初始化
+     * @param jdbcTemplate 传入jdbcTemplate
+     * @param start  查询开始页
+     * @param rows   查询记录数
+     */
     public ThreadQuery(JdbcTemplate jdbcTemplate, int start, int rows) {
         this.start = start;
         this.rows = rows;
 
         excelJdbcTemplate = new ExcelJdbcTemplate(jdbcTemplate);
-
     }
 
-
+    /**
+     * Computes a result, or throws an exception if unable to do so.
+     *
+     * @return computed result
+     * @throws Exception if unable to compute a result
+     */
     @Override
     public List<Excel> call() throws Exception {
         //分页查询数据库数据

@@ -30,5 +30,5 @@ public class Excel implements Serializable {
     @ExcelProperty(value ="remark",index = 3)
     private String remark;
 
-    private Timestamp uptime;
+    private Timestamp upTime;
 }
